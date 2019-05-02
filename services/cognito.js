@@ -7,8 +7,8 @@ const pool_region = config.Cognito.region;
 
 AWS.config.update({
   region: config.Cognito.region,
-  accessKeyId: '',
-  secretAccessKey: '',
+  accessKeyId: config.AWS.accessKey,
+  secretAccessKey: config.AWS.secretKey,
   UserPoolId: config.Cognito.userpoolId
 });
 

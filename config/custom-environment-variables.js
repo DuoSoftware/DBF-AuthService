@@ -3,9 +3,13 @@ module.exports = {
     port: "HOST_PORT",
     version: "HOST_VERSION"
   },
+  AWS: {
+    accessKey: "SYS_AWS_ACCESSKEY",
+    secretKey: "SYS_AWS_SECRETKEY"
+  },
   Cognito: {
     region:  "SYS_COGNITO_REGION",
-    userPoolId: "SYS_COGNITO_USERPOOLID",
+    userpoolId: "SYS_COGNITO_USERPOOLID",
   },
   SES: {
     host: "SYS_SES_HOST",
