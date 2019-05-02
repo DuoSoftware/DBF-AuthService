@@ -1,0 +1,24 @@
+{
+  "name": "DBF-AuthService",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "amazon-cognito-identity-js": "^3.0.11",
+    "aws-sdk": "^2.437.0",
+    "config": "^3.1.0",
+    "dbf-congnitoauthorizer": "^1.0.1",
+    "dbf-dbmodels": "^1.0.173",
+    "jsonwebtoken": "^8.5.1",
+    "nodemailer": "^6.1.1",
+    "request": "^2.88.0",
+    "restify": "^8.2.0",
+    "restify-cors-middleware": "^1.1.1"
+  }
+}
