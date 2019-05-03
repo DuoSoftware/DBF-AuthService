@@ -54,7 +54,7 @@ module.exports.Create = async (req, res) => {
       }
   
       let invitationResponse = await UserInvitationWorker.Create(newInvitation);
-      if (invitationResponse && invitationResponse.errors) { 
+      if (invitationResponse) { 
         // invitation created
         // let context = {
         //   inviteeName: "",
