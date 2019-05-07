@@ -2,6 +2,7 @@ const utils = require('../utils'),
   WorkspaceWorker = require('../workers/workspace'),
   ProjectWorker = require('../workers/project'),
   UserWorker = require('../workers/user'),
+  UserMigrationWorker = require('../workers/userMigration'),
   AccessControlWorker = require('../workers/accessControl'),
   Token = require('../services/token');
 
@@ -20,168 +21,271 @@ module.exports.setup = async (req, res, next) => {
     return;
   }
 
-  // check user already exists 
-  let _user = await UserWorker.GetOne({
-    userName: user.sub
+  // check user in migration table
+  // user found on table
+  let migratedUser = await UserMigrationWorker.GetOne({
+    email: user.email
   }).catch((err) => {
     res.status(500);
     res.send(utils.Error(500, err.message, undefined));
   });
 
-  // no user found on database
-  if (_user == null) {
-    console.log("user data found", _user);
-    // query given workspace name to check 
-    // whether it's already created.
-    let workspace = await WorkspaceWorker.GetOne({
-      workSpaceName: payload.workspaceName
+  if (migratedUser) {
+    if (!migratedUser.migrationStatus) {
+      let workspaceOwenerObj = {
+        tenant: migratedUser.newTenant, // holds default workspace id
+        company: migratedUser.newCompany, // holds default project id
+        userName: user.sub,
+        email: user.email,
+        bot: "",
+        botUniqueId: "",
+        description: "",
+        roles: [{
+          roleId: "all",
+          roleName: "Super User",
+          workspaceId: migratedUser.newTenant,
+          projectId: migratedUser.newCompany,
+        }],
+        groups:  [{
+          groupId: "all",
+          groupName: "all"
+        }],
+        workspaces:  [{ // list all workspaces whick user assigned
+          workspaceId: migratedUser.newTenant,
+          workspaceName: migratedUser.newCompany
+        }],
+        projects:  [{ // list all projects whick user assigned
+          projectId: migratedUser.newCompany,
+          projectName: "default",
+          workspaceId: migratedUser.newTenant
+        }]
+      }
+
+      // create workspace owner
+      let workspaceOwner = await UserWorker.Create(workspaceOwenerObj)
+        .catch((err) => {
+          res.status(500);
+          res.send(utils.Error(500, 'Error getting while creating workspace owner.', undefined));
+        });
+
+      if (workspaceOwner != null) {
+        let workspaceUpdated = await WorkspaceWorker.UpdateOne({
+          "tenant": migratedUser.newTenant
+        }, {
+          $set: { 
+            workSpaceName: payload.workspaceName,
+            billingAccount: user.sub,
+          },
+          $push: {
+            projects: {
+              projectId: migratedUser.newCompany,
+              projectName: "default"
+            },
+            users: {
+              email: user.email,
+              userId: user.sub
+            }
+          }
+        });
+  
+        let projectUpdated = await ProjectWorker.UpdateOne({
+          "company": migratedUser.newCompany
+        }, {
+          $push: {
+            users: {
+              email: user.email,
+              userId: user.sub
+            }
+          }
+        });
+
+        if (workspaceUpdated != null
+          && projectUpdated != null) {
+            console.log('User account setted successfully');
+
+            // get super user permissions
+            const superUserPermissions = await getSuperUserPermissions();
+    
+            let obj = {
+              tenant: migratedUser.newTenant,
+              company: migratedUser.newCompany,
+              userName: workspaceOwner.userName,
+              email: workspaceOwner.email,
+              permissions: superUserPermissions
+            }
+    
+            // generate jwt token with user access and permission
+            let token = Token.sign(obj);
+    
+            res.send(utils.Success(200, "User account setted successfully", token));
+        }
+      }
+    }
+  } else {
+    // current flow
+    // check user already exists 
+    let _user = await UserWorker.GetOne({
+      userName: user.sub
     }).catch((err) => {
       res.status(500);
       res.send(utils.Error(500, err.message, undefined));
     });
 
-    // no workspace found for given name
-    if (workspace == null) {
-      console.log(`${payload.workspaceName} workspace not found.`);
-
-      let workspaceObj = {
-        workSpaceName: payload.workspaceName,
-        billingAccount: user.sub,
-        projects: [],
-        users: [],
-        description: "",
-      }
-
-      // save new workspace
-      let newWorkspace = await WorkspaceWorker.Create(workspaceObj)
-      .catch((err) => {
+    // no user found on database
+    if (_user == null) {
+      console.log("user data found", _user);
+      // query given workspace name to check 
+      // whether it's already created.
+      let workspace = await WorkspaceWorker.GetOne({
+        workSpaceName: payload.workspaceName
+      }).catch((err) => {
         res.status(500);
-        res.send(utils.Error(500, 'Error getting while creating new workspace.', undefined));
+        res.send(utils.Error(500, err.message, undefined));
       });
 
-      // ** both tenant and workspaceId can use for query
-      // project under specific workspace.
+      // no workspace found for given name
+      if (workspace == null) {
+        console.log(`${payload.workspaceName} workspace not found.`);
 
-      let projectObj = {
-        tenant: newWorkspace.tenant,
-        projectName: `Project 01`,
-        workSpaceName: newWorkspace.workSpaceName, 
-        workSpaceId: newWorkspace["_id"], 
-        description: "",
-        users: [],
-      }
+        let workspaceObj = {
+          workSpaceName: payload.workspaceName,
+          billingAccount: user.sub,
+          projects: [],
+          users: [],
+          description: "",
+        }
 
-      // add new project as default to newly 
-      // created workspace
-      let newProject = await ProjectWorker.Create(projectObj)
+        // save new workspace
+        let newWorkspace = await WorkspaceWorker.Create(workspaceObj)
         .catch((err) => {
           res.status(500);
-          res.send(utils.Error(500, 'Error getting while creating new project.', undefined));
+          res.send(utils.Error(500, 'Error getting while creating new workspace.', undefined));
         });
 
-      // both workspace and project created
-      if (newWorkspace != null 
-        && newProject != null /*&& newRole != null*/) {
-        console.log(`new workspace(${newWorkspace.tenant}) created. project(${newProject.company}) attached to that.`);
+        // ** both tenant and workspaceId can use for query
+        // project under specific workspace.
 
-        let workspaceOwenerObj = {
-          tenant: newWorkspace.tenant, // holds default workspace id
-          company: newProject.company, // holds default project id
-          userName: user.sub,
-          email: user.email,
-          bot: "",
-          botUniqueId: "",
+        let projectObj = {
+          tenant: newWorkspace.tenant,
+          projectName: `Project 01`,
+          workSpaceName: newWorkspace.workSpaceName, 
+          workSpaceId: newWorkspace["_id"], 
           description: "",
-          roles: [{
-            roleId: "all",
-            roleName: "Super User",
-            workspaceId: newWorkspace.tenant,
-            projectId: newProject.company,
-          }],
-          groups:  [{
-            groupId: "all",
-            groupName: "all"
-          }],
-          workspaces:  [{ // list all workspaces whick user assigned
-            workspaceId: newWorkspace.tenant,
-            workspaceName: newWorkspace.workSpaceName
-          }],
-          projects:  [{ // list all projects whick user assigned
-            projectId: newProject.company,
-            projectName: newProject.projectName,
-            workspaceId: newWorkspace.tenant
-          }]
+          users: [],
         }
 
-        // create workspace owner
-        let workspaceOwner = await UserWorker.Create(workspaceOwenerObj)
+        // add new project as default to newly 
+        // created workspace
+        let newProject = await ProjectWorker.Create(projectObj)
           .catch((err) => {
             res.status(500);
-            res.send(utils.Error(500, 'Error getting while creating workspace owner.', undefined));
+            res.send(utils.Error(500, 'Error getting while creating new project.', undefined));
           });
 
-        if (workspaceOwner != null) {
-          console.log('workspace owner created', workspaceOwner.email);
-          // update workspace by attaching
-          // project and owner
-          let workspaceUpdated = await WorkspaceWorker.UpdateOne({
-            "_id": newWorkspace["_id"],
-            "tenant": newWorkspace.tenant
-          }, {
-            $push: {
-              projects: {
-                projectId: newProject.company,
-                projectName: newProject.projectName
-              },
-              users: {
-                email: workspaceOwner.email,
-                userId: workspaceOwner.userName
+        // both workspace and project created
+        if (newWorkspace != null 
+          && newProject != null /*&& newRole != null*/) {
+          console.log(`new workspace(${newWorkspace.tenant}) created. project(${newProject.company}) attached to that.`);
+
+          let workspaceOwenerObj = {
+            tenant: newWorkspace.tenant, // holds default workspace id
+            company: newProject.company, // holds default project id
+            userName: user.sub,
+            email: user.email,
+            bot: "",
+            botUniqueId: "",
+            description: "",
+            roles: [{
+              roleId: "all",
+              roleName: "Super User",
+              workspaceId: newWorkspace.tenant,
+              projectId: newProject.company,
+            }],
+            groups:  [{
+              groupId: "all",
+              groupName: "all"
+            }],
+            workspaces:  [{ // list all workspaces whick user assigned
+              workspaceId: newWorkspace.tenant,
+              workspaceName: newWorkspace.workSpaceName
+            }],
+            projects:  [{ // list all projects whick user assigned
+              projectId: newProject.company,
+              projectName: newProject.projectName,
+              workspaceId: newWorkspace.tenant
+            }]
+          }
+
+          // create workspace owner
+          let workspaceOwner = await UserWorker.Create(workspaceOwenerObj)
+            .catch((err) => {
+              res.status(500);
+              res.send(utils.Error(500, 'Error getting while creating workspace owner.', undefined));
+            });
+
+          if (workspaceOwner != null) {
+            console.log('workspace owner created', workspaceOwner.email);
+            // update workspace by attaching
+            // project and owner
+            let workspaceUpdated = await WorkspaceWorker.UpdateOne({
+              "_id": newWorkspace["_id"],
+              "tenant": newWorkspace.tenant
+            }, {
+              $push: {
+                projects: {
+                  projectId: newProject.company,
+                  projectName: newProject.projectName
+                },
+                users: {
+                  email: workspaceOwner.email,
+                  userId: workspaceOwner.userName
+                }
               }
-            }
-          });
-          // update project by attaching
-          // owner details
-          let projectUpdated = await ProjectWorker.UpdateOne({
-            "_id": newProject["_id"],
-            "company": newProject.company
-          }, {
-            $push: {
-              users: {
-                email: workspaceOwner.email,
-                userId: workspaceOwner.userName
+            });
+            // update project by attaching
+            // owner details
+            let projectUpdated = await ProjectWorker.UpdateOne({
+              "_id": newProject["_id"],
+              "company": newProject.company
+            }, {
+              $push: {
+                users: {
+                  email: workspaceOwner.email,
+                  userId: workspaceOwner.userName
+                }
               }
+            });
+
+            if (workspaceUpdated != null
+              && projectUpdated != null) {
+              console.log('User account setted successfully');
+
+              // get super user permissions
+              const superUserPermissions = await getSuperUserPermissions();
+
+              let obj = {
+                tenant: newWorkspace.tenant,
+                company: newProject.company,
+                userName: workspaceOwner.userName,
+                email: workspaceOwner.email,
+                permissions: superUserPermissions
+              }
+
+              // generate jwt token with user access and permission
+              let token = Token.sign(obj);
+    
+              res.send(utils.Success(200, "User account setted successfully", token));
             }
-          });
-
-          if (workspaceUpdated != null
-            && projectUpdated != null) {
-            console.log('User account setted successfully');
-
-            // get super user permissions
-            const superUserPermissions = await getSuperUserPermissions();
-
-            let obj = {
-              tenant: newWorkspace.tenant,
-              company: newProject.company,
-              userName: workspaceOwner.userName,
-              email: workspaceOwner.email,
-              permissions: superUserPermissions
-            }
-
-            // generate jwt token with user access and permission
-            let token = Token.sign(obj);
-  
-            res.send(utils.Success(200, "User account setted successfully", token));
           }
         }
+      } else {
+        res.status(400);
+        res.send(utils.Error(400, `${payload.workspaceName} workspace is already exists.`));
       }
     } else {
-      res.status(400);
-      res.send(utils.Error(400, `${payload.workspaceName} workspace is already exists.`));
+      res.status(401);
+      res.send(utils.Error(401, "User already exists.", undefined));
     }
-  } else {
-    res.status(401);
-    res.send(utils.Error(401, "User already exists.", undefined));
   }
 }
 

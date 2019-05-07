@@ -14,7 +14,7 @@
     "aws-sdk": "^2.437.0",
     "config": "^3.1.0",
     "dbf-congnitoauthorizer": "^1.0.1",
-    "dbf-dbmodels": "^1.0.173",
+    "dbf-dbmodels": "^1.0.178",
     "jsonwebtoken": "^8.5.1",
     "nodemailer": "^6.1.1",
     "request": "^2.88.0",
