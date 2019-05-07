@@ -52,11 +52,11 @@ module.exports.setup = async (req, res, next) => {
         }],
         workspaces:  [{ // list all workspaces whick user assigned
           workspaceId: migratedUser.newTenant,
-          workspaceName: migratedUser.newCompany
+          workspaceName: payload.workspaceName
         }],
         projects:  [{ // list all projects whick user assigned
           projectId: migratedUser.newCompany,
-          projectName: "default",
+          projectName: "Project 01",
           workspaceId: migratedUser.newTenant
         }]
       }
@@ -79,7 +79,7 @@ module.exports.setup = async (req, res, next) => {
           $push: {
             projects: {
               projectId: migratedUser.newCompany,
-              projectName: "default"
+              projectName: "Project 01"
             },
             users: {
               email: user.email,
@@ -91,6 +91,10 @@ module.exports.setup = async (req, res, next) => {
         let projectUpdated = await ProjectWorker.UpdateOne({
           "company": migratedUser.newCompany
         }, {
+          $set: { 
+            workSpaceName: payload.workspaceName,
+            projectName: "Project 01"
+          },
           $push: {
             users: {
               email: user.email,
@@ -102,6 +106,14 @@ module.exports.setup = async (req, res, next) => {
         if (workspaceUpdated != null
           && projectUpdated != null) {
             console.log('User account setted successfully');
+
+            await UserMigrationWorker.UpdateOne({
+              email: user.email
+            }, {
+              $set: { 
+                migrationStatus: true
+              }
+            });
 
             // get super user permissions
             const superUserPermissions = await getSuperUserPermissions();
