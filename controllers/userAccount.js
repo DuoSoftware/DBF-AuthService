@@ -73,15 +73,19 @@ module.exports.setup = async (req, res, next) => {
       if (workspaceOwner != null) {
         console.log('user object created for migratedUser');
         let workspaceUpdated = await WorkspaceWorker.UpdateOne({
-          "tenant": migratedUser.newTenant
+          "tenant": migratedUser.newTenant,
+          "projects.projectId": migratedUser.newCompany
         }, {
           $set: { 
             workSpaceName: payload.workspaceName,
             billingAccount: user.sub,
-            "projects.$.projectId": migratedUser.newCompany,
-            "projects.$.projectName":"Project 01",
-            "users.$.email": user.email,
-            "users.$.userId": user.sub
+            "projects.$.projectName": "Project 01"
+          },
+          $push: {
+            users: {
+              email: user.email,
+              userId: user.sub
+            }
           }
         });
   
@@ -90,9 +94,13 @@ module.exports.setup = async (req, res, next) => {
         }, {
           $set: { 
             workSpaceName: payload.workspaceName,
-            projectName: "Project 01",
-            "users.$.email": user.email,
-            "users.$.userId": user.sub
+            projectName: "Project 01"
+          },
+          $push: {
+            users: {
+              email: user.email,
+              userId: user.sub
+            }
           }
         });
 
@@ -100,13 +108,17 @@ module.exports.setup = async (req, res, next) => {
           && projectUpdated != null) {
             console.log('User account setted successfully');
 
-            await UserMigrationWorker.UpdateOne({
-              email: user.email
-            }, {
-              $set: { 
-                migrationStatus: true
-              }
-            });
+            try {
+              let xyz = await UserMigrationWorker.UpdateOne({
+                email: user.email
+              }, {
+                $set: { 
+                  migrationStatus: true
+                }
+              });
+            } catch (error) {
+              console.log("Error", error);
+            }
 
             // get super user permissions
             const superUserPermissions = await getSuperUserPermissions();
