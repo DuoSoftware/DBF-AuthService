@@ -1,4 +1,5 @@
-const project = require('dbf-dbmodels/Models/RolesAndGroups').project;
+const project = require('dbf-dbmodels/Models/RolesAndGroups').project,
+  IDGenerator = require('../services/idGenerator');
 
 module.exports.Create = async (data) => {
   let projectId = await IDGenerator.get('project').catch((err) => {});
