@@ -31,7 +31,9 @@ module.exports.setup = async (req, res, next) => {
   });
 
   if (migratedUser) {
+    console.log('migratedUser record found');
     if (!migratedUser.migrationStatus) {
+      console.log('migratedUser status false');
       let workspaceOwenerObj = {
         tenant: migratedUser.newTenant, // holds default workspace id
         company: migratedUser.newCompany, // holds default project id
@@ -69,22 +71,17 @@ module.exports.setup = async (req, res, next) => {
         });
 
       if (workspaceOwner != null) {
+        console.log('user object created for migratedUser');
         let workspaceUpdated = await WorkspaceWorker.UpdateOne({
           "tenant": migratedUser.newTenant
         }, {
           $set: { 
             workSpaceName: payload.workspaceName,
             billingAccount: user.sub,
-          },
-          $push: {
-            projects: {
-              projectId: migratedUser.newCompany,
-              projectName: "Project 01"
-            },
-            users: {
-              email: user.email,
-              userId: user.sub
-            }
+            "projects.$.projectId": migratedUser.newCompany,
+            "projects.$.projectName":"Project 01",
+            "users.$.email": user.email,
+            "users.$.userId": user.sub
           }
         });
   
@@ -93,13 +90,9 @@ module.exports.setup = async (req, res, next) => {
         }, {
           $set: { 
             workSpaceName: payload.workspaceName,
-            projectName: "Project 01"
-          },
-          $push: {
-            users: {
-              email: user.email,
-              userId: user.sub
-            }
+            projectName: "Project 01",
+            "users.$.email": user.email,
+            "users.$.userId": user.sub
           }
         });
 
