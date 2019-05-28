@@ -56,21 +56,21 @@ module.exports.Create = async (req, res) => {
       let invitationResponse = await UserInvitationWorker.Create(newInvitation);
       if (invitationResponse) { 
         // invitation created
-        // let context = {
-        //   inviteeName: "",
-        //   inviterName: inviter.family_name,
-        //   workspaceName: inviter.project.workSpaceName,
-        //   projectName: inviter.project.projectName,
-        //   invitationUrl: `https://localhost:1010/dbf/api/v1/invitation/accept/${invitationResponse.id}`
-        // };
+        let context = {
+          inviteeName: "",
+          inviterName: inviter.family_name,
+          workspaceName: inviter.project.workSpaceName,
+          projectName: inviter.project.projectName,
+          invitationUrl: `https://localhost:1010/dbf/api/v1/invitation/accept/${invitationResponse.id}`
+        };
 
-        // // build invite_existing_user mail template with data
-        // let mailTemplate = new EmailTemplate('invite_existing_user').format(context);
+        // build invite_existing_user mail template with data
+        let mailTemplate = new EmailTemplate('invite_existing_user').format(context);
 
-        // // create invitaion mail and send
-        // let email = new MailService();
-        // email.subject(mailTemplate.subject).htmlBody(mailTemplate.html).to(invitee).from(inviter.email);
-        // email.send();
+        // create invitaion mail and send
+        let email = new MailService();
+        email.subject(mailTemplate.subject).htmlBody(mailTemplate.html).to(invitee).from(inviter.email);
+        email.send();
 
         res.status(200);
         res.send(utils.Success(200, `User invitation created.`, {invitationId: invitationResponse.id}));
