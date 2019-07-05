@@ -6,6 +6,7 @@ const restify = require('restify'),
 
 const UserInvitationCtrl = require('./controllers/userInvitations'),
   UserAccountCtrl = require('./controllers/userAccount'),
+  UserCtrl = require('./controllers/user'),
   AccountPermissionCtrl = require('./controllers/accountPermission');
 
 const MongooseConnection = new require('dbf-dbmodels/MongoConnection');
@@ -54,3 +55,7 @@ server.get('/dbf/api/:version/invitations/received', authorization(), workspaceA
 
 server.post('/dbf/api/:version/setup/useraccount', authorization(), UserAccountCtrl.setup);
 server.get('/dbf/api/:version/user/permissions', authorization(), AccountPermissionCtrl.get);
+
+server.post('/dbf/api/:version/user/changepassword', authorization(), UserCtrl.ChangePassword);
+server.get('/dbf/api/:version/user', authorization(), UserCtrl.GetUser);
+server.put('/dbf/api/:version/user/profile', authorization(), UserCtrl.UpdateProfile);
